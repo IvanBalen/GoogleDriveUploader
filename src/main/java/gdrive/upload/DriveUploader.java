@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -29,6 +30,7 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
+import com.google.common.io.Files;
 
 /**
  * this class contains the main logic for transferring files from a local folder to Google drive
@@ -50,12 +52,15 @@ public class DriveUploader {
     @Value("${gdrive.root}")
     private String rootFolder;
     
+    @Value("${gdrive.done}")
+    private String doneFolder;
 
 	public static void main(String[] args) throws Exception {
 		// TODO Auto-generated method stub
     	
 		DriveUploader du = new DriveUploader();
-		du.rootFolder = "C:\\gdrive";
+		du.rootFolder = "C:\\gdrive\\upload";
+		du.doneFolder = "C:\\gdrive\\done";
 		du.syncGDrive();
 				
 	}
@@ -88,6 +93,18 @@ public class DriveUploader {
 		}
 		,() -> System.out.println("Google drive is currently unavailable!"));
     }
+	/**
+	 * this method copies the uploaded files to doneFolder and then deletes the original local file
+	 * this is done to prevent uploading the same files again
+	 * @param file
+	 * @throws IOException
+	 */
+	private void moveFile(File file) throws IOException {
+		
+		Files.copy(file, Path.of(doneFolder, file.getName()).toFile());
+		file.delete();
+		
+	}
 	/**
 	 * this method uploads files from a local folder to google drive, mirroring the local folder structure
 	 * @param filesMap -  map that holds the folder paths as keys and file names as values
@@ -136,6 +153,7 @@ public class DriveUploader {
 						    .setFields("id")
 						    .execute();
 					System.out.println("file uploaded: " + path.toString());
+					moveFile(localFile);
 					
 				}
 			}
@@ -177,9 +195,10 @@ public class DriveUploader {
 	 * @return - Google drive service instance
 	 * @throws Exception
 	 */
-    private  Drive getDriveService() throws Exception {
+    private  Drive getDriveService() {
         InputStream in = DriveUploader.class.getResourceAsStream("/credentials/cred.json");
-     
+        
+        try {
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
@@ -194,6 +213,9 @@ public class DriveUploader {
                 new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("me"))
                 .setApplicationName(APPLICATION_NAME)
                 .build();
+        }catch(Exception e) {
+        	return null;
+        }
     }
 
 }
